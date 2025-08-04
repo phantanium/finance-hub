@@ -2,6 +2,11 @@ import { MetricCard } from "@/components/dashboard/MetricCard";
 import { TrendChart } from "@/components/charts/TrendChart";
 import { ComparisonChart } from "@/components/charts/ComparisonChart";
 import { HealthScoreGauge } from "@/components/charts/HealthScoreGauge";
+import { useQuery } from "@tanstack/react-query";
+import { fetchCompanyData } from "@/lib/api";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 interface Company {
   ticker: string;
@@ -14,20 +19,65 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ selectedCompany }: DashboardProps) {
-  // Mock data - in real application, this would come from API
-  const mockTrendData = [
-    { period: "2023-Q1", value: 1.20, benchmark: 1.15 },
-    { period: "2023-Q2", value: 1.23, benchmark: 1.18 },
-    { period: "2023-Q3", value: 1.24, benchmark: 1.20 },
-    { period: "2023-Q4", value: 1.25, benchmark: 1.22 },
-    { period: "2024-Q1", value: 1.28, benchmark: 1.25 }
-  ];
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['companyData', selectedCompany.ticker],
+    queryFn: () => fetchCompanyData(selectedCompany.ticker),
+    enabled: !!selectedCompany.ticker,
+  });
 
-  const mockComparisonData = [
-    { metric: "Current Ratio", company: 1.25, industry: 1.22, target: 1.30 },
-    { metric: "ROE", company: 15.2, industry: 12.8, target: 16.0 },
-    { metric: "DER", company: 0.65, industry: 0.70, target: 0.60 },
-    { metric: "Asset Turnover", company: 0.33, industry: 0.35, target: 0.40 }
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <Skeleton className="h-8 w-64" />
+            <Skeleton className="h-4 w-96 mt-2" />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-32" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Error</AlertTitle>
+        <AlertDescription>
+          Failed to load company data. Please try again later.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (!data) return null;
+
+  const comparisonData = [
+    { 
+      metric: "Current Ratio", 
+      company: data.ratios.liquidity?.currentRatio || 0, 
+      industry: data.industry_average?.average_current_ratio || 0 
+    },
+    { 
+      metric: "ROE", 
+      company: data.ratios.profitability?.roe || 0, 
+      industry: data.industry_average?.average_roe || 0 
+    },
+    { 
+      metric: "DER", 
+      company: data.ratios.leverage?.der || 0, 
+      industry: data.industry_average?.average_der || 0 
+    },
+    { 
+      metric: "Asset Turnover", 
+      company: data.ratios.activity?.assetTurnover || 0, 
+      industry: data.industry_average?.average_asset_turnover || 0 
+    }
   ];
 
   return (
@@ -46,30 +96,22 @@ export default function Dashboard({ selectedCompany }: DashboardProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <MetricCard
           title="Current Ratio"
-          value={1.25}
-          previousValue={1.24}
-          target={1.30}
+          value={data.ratios.liquidity?.currentRatio || 0}
           format="decimal"
         />
         <MetricCard
           title="Return on Equity"
-          value={15.2}
-          previousValue={14.8}
-          target={16.0}
+          value={data.ratios.profitability?.roe || 0}
           format="percentage"
         />
         <MetricCard
           title="Debt to Equity"
-          value={0.65}
-          previousValue={0.68}
-          target={0.60}
+          value={data.ratios.leverage?.der || 0}
           format="decimal"
         />
         <MetricCard
           title="Asset Turnover"
-          value={0.33}
-          previousValue={0.32}
-          target={0.40}
+          value={data.ratios.activity?.assetTurnover || 0}
           format="decimal"
         />
       </div>
@@ -77,7 +119,7 @@ export default function Dashboard({ selectedCompany }: DashboardProps) {
       {/* Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <TrendChart
-          data={mockTrendData}
+          data={data.trends}
           title="Current Ratio Trend"
           yAxisLabel="Current Ratio"
           format="decimal"
@@ -85,14 +127,14 @@ export default function Dashboard({ selectedCompany }: DashboardProps) {
         />
         
         <HealthScoreGauge
-          score={78}
+          score={data.health_score || 0}
           title="Financial Health Score"
         />
       </div>
 
       <div className="grid grid-cols-1 gap-6">
         <ComparisonChart
-          data={mockComparisonData}
+          data={comparisonData}
           title="Key Ratios Comparison"
           companyName={selectedCompany.ticker}
           format="decimal"

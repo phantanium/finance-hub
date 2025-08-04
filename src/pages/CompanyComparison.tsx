@@ -9,6 +9,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useQuery } from "@tanstack/react-query";
+import { fetchCompanyComparison } from "@/lib/api";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 interface Company {
   ticker: string;
@@ -30,30 +35,66 @@ interface CompanyComparisonProps {
 export default function CompanyComparison({ selectedCompany }: CompanyComparisonProps) {
   const [compareCompany, setCompareCompany] = useState<Company>(companies[1]);
 
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['companyComparison', selectedCompany.ticker, compareCompany.ticker],
+    queryFn: () => fetchCompanyComparison(selectedCompany.ticker, compareCompany.ticker),
+    enabled: !!selectedCompany.ticker && !!compareCompany.ticker,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <Skeleton className="h-8 w-56" />
+            <Skeleton className="h-4 w-64 mt-2" />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Skeleton className="h-24" />
+          <Skeleton className="h-24" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Error</AlertTitle>
+        <AlertDescription>
+          Failed to load comparison data. Please try again later.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (!data) return null;
+
+  const company1Data = data.comparison_data[selectedCompany.ticker];
+  const company2Data = data.comparison_data[compareCompany.ticker];
+
   const comparisonData = [
     { 
       metric: "Current Ratio", 
-      company: 1.25, 
-      industry: 1.35,
-      target: 1.30 
+      company: company1Data?.ratios.liquidity?.currentRatio || 0, 
+      industry: company2Data?.ratios.liquidity?.currentRatio || 0,
     },
     { 
       metric: "ROE", 
-      company: 15.2, 
-      industry: 17.8,
-      target: 16.0 
+      company: company1Data?.ratios.profitability?.roe || 0, 
+      industry: company2Data?.ratios.profitability?.roe || 0,
     },
     { 
       metric: "DER", 
-      company: 0.65, 
-      industry: 0.58,
-      target: 0.60 
+      company: company1Data?.ratios.leverage?.der || 0, 
+      industry: company2Data?.ratios.leverage?.der || 0,
     },
     { 
       metric: "Asset Turnover", 
-      company: 0.33, 
-      industry: 0.28,
-      target: 0.40 
+      company: company1Data?.ratios.activity?.assetTurnover || 0, 
+      industry: company2Data?.ratios.activity?.assetTurnover || 0,
     }
   ];
 
@@ -110,7 +151,7 @@ export default function CompanyComparison({ selectedCompany }: CompanyComparison
           <h4 className="font-semibold text-foreground">Liquidity</h4>
           <MetricCard
             title="Current Ratio"
-            value={1.25}
+            value={company1Data?.ratios.liquidity?.currentRatio || 0}
             format="decimal"
             className="border-primary/20"
           />
@@ -119,7 +160,7 @@ export default function CompanyComparison({ selectedCompany }: CompanyComparison
           <h4 className="font-semibold text-foreground">Profitability</h4>
           <MetricCard
             title="ROE"
-            value={15.2}
+            value={company1Data?.ratios.profitability?.roe || 0}
             format="percentage"
             className="border-primary/20"
           />
@@ -128,7 +169,7 @@ export default function CompanyComparison({ selectedCompany }: CompanyComparison
           <h4 className="font-semibold text-foreground">Leverage</h4>
           <MetricCard
             title="DER"
-            value={0.65}
+            value={company1Data?.ratios.leverage?.der || 0}
             format="decimal"
             className="border-primary/20"
           />
@@ -137,7 +178,7 @@ export default function CompanyComparison({ selectedCompany }: CompanyComparison
           <h4 className="font-semibold text-foreground">Activity</h4>
           <MetricCard
             title="Asset Turnover"
-            value={0.33}
+            value={company1Data?.ratios.activity?.assetTurnover || 0}
             format="decimal"
             className="border-primary/20"
           />
@@ -147,10 +188,7 @@ export default function CompanyComparison({ selectedCompany }: CompanyComparison
       {/* Charts */}
       <div className="grid grid-cols-1 gap-6">
         <ComparisonChart
-          data={comparisonData.map(item => ({
-            ...item,
-            industry: item.industry // This would be the compare company's data
-          }))}
+          data={comparisonData}
           title={`${selectedCompany.ticker} vs ${compareCompany.ticker}`}
           companyName={selectedCompany.ticker}
           format="decimal"

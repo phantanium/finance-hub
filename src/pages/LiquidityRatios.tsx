@@ -1,6 +1,11 @@
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { TrendChart } from "@/components/charts/TrendChart";
 import { ComparisonChart } from "@/components/charts/ComparisonChart";
+import { useQuery } from "@tanstack/react-query";
+import { fetchCompanyData } from "@/lib/api";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 interface Company {
   ticker: string;
@@ -13,18 +18,58 @@ interface LiquidityRatiosProps {
 }
 
 export default function LiquidityRatios({ selectedCompany }: LiquidityRatiosProps) {
-  const trendData = [
-    { period: "2023-Q1", value: 1.20, benchmark: 1.15 },
-    { period: "2023-Q2", value: 1.23, benchmark: 1.18 },
-    { period: "2023-Q3", value: 1.24, benchmark: 1.20 },
-    { period: "2023-Q4", value: 1.25, benchmark: 1.22 },
-    { period: "2024-Q1", value: 1.28, benchmark: 1.25 }
-  ];
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['liquidityRatios', selectedCompany.ticker],
+    queryFn: () => fetchCompanyData(selectedCompany.ticker),
+    enabled: !!selectedCompany.ticker,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-96 mt-2" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {[...Array(3)].map((_, i) => (
+            <Skeleton key={i} className="h-32" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Error</AlertTitle>
+        <AlertDescription>
+          Failed to load liquidity ratios data. Please try again later.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (!data || !data.ratios.liquidity) return null;
 
   const comparisonData = [
-    { metric: "Current Ratio", company: 1.25, industry: 1.22 },
-    { metric: "Quick Ratio", company: 0.98, industry: 0.95 },
-    { metric: "Cash Ratio", company: 0.45, industry: 0.42 }
+    { 
+      metric: "Current Ratio", 
+      company: data.ratios.liquidity.currentRatio, 
+      industry: data.industry_average?.average_current_ratio || 0 
+    },
+    { 
+      metric: "Quick Ratio", 
+      company: data.ratios.liquidity.quickRatio, 
+      industry: data.industry_average?.average_quick_ratio || 0 
+    },
+    { 
+      metric: "Cash Ratio", 
+      company: data.ratios.liquidity.cashRatio, 
+      industry: data.industry_average?.average_cash_ratio || 0 
+    }
   ];
 
   return (
@@ -39,27 +84,24 @@ export default function LiquidityRatios({ selectedCompany }: LiquidityRatiosProp
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <MetricCard
           title="Current Ratio"
-          value={1.25}
-          previousValue={1.24}
+          value={data.ratios.liquidity.currentRatio}
           format="decimal"
         />
         <MetricCard
           title="Quick Ratio"
-          value={0.98}
-          previousValue={0.95}
+          value={data.ratios.liquidity.quickRatio}
           format="decimal"
         />
         <MetricCard
           title="Cash Ratio"
-          value={0.45}
-          previousValue={0.43}
+          value={data.ratios.liquidity.cashRatio}
           format="decimal"
         />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <TrendChart
-          data={trendData}
+          data={data.trends}
           title="Current Ratio Trend"
           yAxisLabel="Current Ratio"
           format="decimal"

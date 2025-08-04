@@ -1,6 +1,11 @@
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { TrendChart } from "@/components/charts/TrendChart";
 import { ComparisonChart } from "@/components/charts/ComparisonChart";
+import { useQuery } from "@tanstack/react-query";
+import { fetchCompanyData } from "@/lib/api";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 interface Company {
   ticker: string;
@@ -13,17 +18,53 @@ interface ActivityRatiosProps {
 }
 
 export default function ActivityRatios({ selectedCompany }: ActivityRatiosProps) {
-  const trendData = [
-    { period: "2023-Q1", value: 0.31, benchmark: 0.35 },
-    { period: "2023-Q2", value: 0.32, benchmark: 0.35 },
-    { period: "2023-Q3", value: 0.32, benchmark: 0.36 },
-    { period: "2023-Q4", value: 0.33, benchmark: 0.36 },
-    { period: "2024-Q1", value: 0.34, benchmark: 0.37 }
-  ];
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['activityRatios', selectedCompany.ticker],
+    queryFn: () => fetchCompanyData(selectedCompany.ticker),
+    enabled: !!selectedCompany.ticker,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-96 mt-2" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {[...Array(2)].map((_, i) => (
+            <Skeleton key={i} className="h-32" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Error</AlertTitle>
+        <AlertDescription>
+          Failed to load activity ratios data. Please try again later.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (!data || !data.ratios.activity) return null;
 
   const comparisonData = [
-    { metric: "Asset Turnover", company: 0.33, industry: 0.36 },
-    { metric: "Inventory Turnover", company: 8.5, industry: 7.8 }
+    { 
+      metric: "Asset Turnover", 
+      company: data.ratios.activity.assetTurnover, 
+      industry: data.industry_average?.average_asset_turnover || 0 
+    },
+    { 
+      metric: "Inventory Turnover", 
+      company: data.ratios.activity.inventoryTurnover, 
+      industry: data.industry_average?.average_inventory_turnover || 0 
+    }
   ];
 
   return (
@@ -38,21 +79,19 @@ export default function ActivityRatios({ selectedCompany }: ActivityRatiosProps)
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <MetricCard
           title="Asset Turnover"
-          value={0.33}
-          previousValue={0.32}
+          value={data.ratios.activity.assetTurnover}
           format="decimal"
         />
         <MetricCard
           title="Inventory Turnover"
-          value={8.5}
-          previousValue={8.2}
+          value={data.ratios.activity.inventoryTurnover}
           format="decimal"
         />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <TrendChart
-          data={trendData}
+          data={data.trends}
           title="Asset Turnover Trend"
           yAxisLabel="Asset Turnover Ratio"
           format="decimal"

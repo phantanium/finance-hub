@@ -1,6 +1,11 @@
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { TrendChart } from "@/components/charts/TrendChart";
 import { ComparisonChart } from "@/components/charts/ComparisonChart";
+import { useQuery } from "@tanstack/react-query";
+import { fetchCompanyData } from "@/lib/api";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 interface Company {
   ticker: string;
@@ -13,18 +18,58 @@ interface LeverageRatiosProps {
 }
 
 export default function LeverageRatios({ selectedCompany }: LeverageRatiosProps) {
-  const trendData = [
-    { period: "2023-Q1", value: 0.68, benchmark: 0.70 },
-    { period: "2023-Q2", value: 0.67, benchmark: 0.69 },
-    { period: "2023-Q3", value: 0.66, benchmark: 0.68 },
-    { period: "2023-Q4", value: 0.65, benchmark: 0.67 },
-    { period: "2024-Q1", value: 0.64, benchmark: 0.66 }
-  ];
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['leverageRatios', selectedCompany.ticker],
+    queryFn: () => fetchCompanyData(selectedCompany.ticker),
+    enabled: !!selectedCompany.ticker,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-96 mt-2" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {[...Array(3)].map((_, i) => (
+            <Skeleton key={i} className="h-32" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Error</AlertTitle>
+        <AlertDescription>
+          Failed to load leverage ratios data. Please try again later.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (!data || !data.ratios.leverage) return null;
 
   const comparisonData = [
-    { metric: "DER", company: 0.65, industry: 0.67 },
-    { metric: "DAR", company: 0.39, industry: 0.42 },
-    { metric: "Times Interest Earned", company: 4.2, industry: 3.8 }
+    { 
+      metric: "DER", 
+      company: data.ratios.leverage.der, 
+      industry: data.industry_average?.average_der || 0 
+    },
+    { 
+      metric: "DAR", 
+      company: data.ratios.leverage.dar, 
+      industry: data.industry_average?.average_dar || 0 
+    },
+    { 
+      metric: "Times Interest Earned", 
+      company: data.ratios.leverage.timesInterestEarned, 
+      industry: data.industry_average?.average_times_interest_earned || 0 
+    }
   ];
 
   return (
@@ -39,27 +84,24 @@ export default function LeverageRatios({ selectedCompany }: LeverageRatiosProps)
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <MetricCard
           title="Debt to Equity (DER)"
-          value={0.65}
-          previousValue={0.66}
+          value={data.ratios.leverage.der}
           format="decimal"
         />
         <MetricCard
           title="Debt to Assets (DAR)"
-          value={0.39}
-          previousValue={0.40}
+          value={data.ratios.leverage.dar}
           format="decimal"
         />
         <MetricCard
           title="Times Interest Earned"
-          value={4.2}
-          previousValue={4.0}
+          value={data.ratios.leverage.timesInterestEarned}
           format="decimal"
         />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <TrendChart
-          data={trendData}
+          data={data.trends}
           title="Debt to Equity Trend"
           yAxisLabel="Debt to Equity Ratio"
           format="decimal"

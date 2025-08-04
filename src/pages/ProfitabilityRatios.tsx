@@ -1,6 +1,11 @@
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { TrendChart } from "@/components/charts/TrendChart";
 import { ComparisonChart } from "@/components/charts/ComparisonChart";
+import { useQuery } from "@tanstack/react-query";
+import { fetchCompanyData } from "@/lib/api";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 interface Company {
   ticker: string;
@@ -13,19 +18,63 @@ interface ProfitabilityRatiosProps {
 }
 
 export default function ProfitabilityRatios({ selectedCompany }: ProfitabilityRatiosProps) {
-  const trendData = [
-    { period: "2023-Q1", value: 14.5, benchmark: 12.8 },
-    { period: "2023-Q2", value: 14.8, benchmark: 13.1 },
-    { period: "2023-Q3", value: 15.0, benchmark: 13.3 },
-    { period: "2023-Q4", value: 15.2, benchmark: 13.5 },
-    { period: "2024-Q1", value: 15.5, benchmark: 13.8 }
-  ];
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['profitabilityRatios', selectedCompany.ticker],
+    queryFn: () => fetchCompanyData(selectedCompany.ticker),
+    enabled: !!selectedCompany.ticker,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-8 w-52" />
+          <Skeleton className="h-4 w-96 mt-2" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-32" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Error</AlertTitle>
+        <AlertDescription>
+          Failed to load profitability ratios data. Please try again later.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (!data || !data.ratios.profitability) return null;
 
   const comparisonData = [
-    { metric: "ROE", company: 15.2, industry: 13.5 },
-    { metric: "ROA", company: 2.8, industry: 2.5 },
-    { metric: "NPM", company: 8.5, industry: 7.8 },
-    { metric: "GPM", company: 12.3, industry: 11.5 }
+    { 
+      metric: "ROE", 
+      company: data.ratios.profitability.roe, 
+      industry: data.industry_average?.average_roe || 0 
+    },
+    { 
+      metric: "ROA", 
+      company: data.ratios.profitability.roa, 
+      industry: data.industry_average?.average_roa || 0 
+    },
+    { 
+      metric: "NPM", 
+      company: data.ratios.profitability.npm, 
+      industry: data.industry_average?.average_npm || 0 
+    },
+    { 
+      metric: "GPM", 
+      company: data.ratios.profitability.gpm, 
+      industry: data.industry_average?.average_gpm || 0 
+    }
   ];
 
   return (
@@ -40,33 +89,29 @@ export default function ProfitabilityRatios({ selectedCompany }: ProfitabilityRa
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <MetricCard
           title="Return on Equity (ROE)"
-          value={15.2}
-          previousValue={15.0}
+          value={data.ratios.profitability.roe}
           format="percentage"
         />
         <MetricCard
           title="Return on Assets (ROA)"
-          value={2.8}
-          previousValue={2.7}
+          value={data.ratios.profitability.roa}
           format="percentage"
         />
         <MetricCard
           title="Net Profit Margin (NPM)"
-          value={8.5}
-          previousValue={8.3}
+          value={data.ratios.profitability.npm}
           format="percentage"
         />
         <MetricCard
           title="Gross Profit Margin (GPM)"
-          value={12.3}
-          previousValue={12.1}
+          value={data.ratios.profitability.gpm}
           format="percentage"
         />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <TrendChart
-          data={trendData}
+          data={data.trends}
           title="ROE Trend"
           yAxisLabel="Return on Equity (%)"
           format="percentage"
